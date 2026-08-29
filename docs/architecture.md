@@ -662,12 +662,14 @@ pitchiq/
     boosted.py          XGBoost over the feature layer
     ensemble.py         blends outcomes, keeps DC's scorelines
     uncertainty.py      bootstrap: error bars on every rating
+    shots.py            shot ratings as a prior (tested, rejected)
     outcome.py          rating difference → three probabilities
     store.py            save/load as JSON, with provenance
   sim/
     tournament.py       the Champions League bracket
     league.py           a domestic season, for validation at scale
     draws.py            spreads seasons across parameter draws
+    rules.py            competition format, versioned by season
   eval/
     metrics.py          RPS, log-loss, Brier, accuracy
     calibration.py      reliability curves, over-confidence
@@ -675,7 +677,7 @@ pitchiq/
     backtest.py         the walk-forward pass, cached
 ```
 
-**4,504 lines. 179 tests.**
+**5,400 lines. 210 tests.**
 
 ### One deliberate structural choice
 

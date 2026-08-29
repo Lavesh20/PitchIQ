@@ -21,7 +21,7 @@ Lower is better. **We cover about 80% of the distance from ignorance to
 the professionals**, using only past results and dates — no injuries, no
 lineups, no xG.
 
-304,039 matches · 1,533 clubs · 83 countries · 179 tests
+304,039 matches · 1,533 clubs · 83 countries · 210 tests
 
 ## Why it is built this way
 
@@ -78,7 +78,7 @@ pitchiq/
   eval/                 metrics, calibration, market, backtest
 scripts/                download, train, predict, simulate, evaluate
 data/external/          the 2026/27 draw
-tests/                  179 tests
+tests/                  210 tests
 ```
 
 ## Club-name resolution
@@ -169,6 +169,9 @@ End to end and measured.
 - [x] Evaluation against bookmaker closing odds, with intervals
 - [x] Probability calibration, on matches and on whole seasons
 - [x] Parameter uncertainty propagated into the simulator
+- [x] Per-country corrections reported with intervals
+- [x] Competition format versioned by season, not hard-coded
+- [x] Shot-based ratings as a goals prior — tested, rejected, recorded
 
 ### What the measurement found
 

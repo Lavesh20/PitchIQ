@@ -707,6 +707,97 @@ results decides things, and washes out by the trophy.
 
 ---
 
+### 6.2 Robustness
+
+Four smaller pieces, three of which changed something and one of which
+answered a question with "no".
+
+**Per-country corrections now carry intervals.** Resampling the European
+record 100 times shows how much of each correction is evidence and how
+much is the sample we happen to have:
+
+```
+country  matches   offset   90% interval      scale   90% interval
+ITA          620   +71.4   [ +49, +108]        0.88   [0.75, 0.97]
+SCO          165  -100.5   [-151,  -78]        0.75   [0.68, 0.86]
+ROU          102   -95.4   [-152,  -62]        0.85   [0.78, 0.94]
+SMR           20   -95.1   [-115,  -50]        1.09   [0.95, 1.23]
+```
+
+**Only 27 of 55 offsets are distinguishable from zero**, and 15 of 55
+scales. Scotland's, which is what makes the Celtic correction work, is
+firmly among them. Half the table is a reasonable guess rather than a
+measurement, and now says so.
+
+The backlog also asked whether the shrinkage should be harder where
+evidence is thin. Selecting the priors across four validation seasons
+picks (100, 0.70), which scores 0.2055 on the held-out window against
+0.2052 for the current (100, 0.35). **The setting does not need
+changing.** A first attempt selected on the test window instead, which
+preferred far harder shrinkage — a reminder that the discipline matters
+even for a parameter this minor.
+
+**Ties are now broken at random.** Six criteria are implemented; UEFA
+has two more, disciplinary points and club coefficient, and neither is
+modelled because neither can be — the UEFA feed carries no cards and the
+draw file carries no coefficients. Simulating cards from domestic rates
+would be inventing the evidence.
+
+So a tie can survive all six. Measured over 20,000 seasons that happens
+in **2.2%** of them, and in **0.16%** — one in 645 — the tie straddles
+the 8/9 or 24/25 line and changes who qualifies. The previous behaviour
+resolved those by club index, so the same club won every tie it was ever
+in. A small bias, but a bias, and randomising costs nothing.
+
+**The format is now data.** The bracket, the qualification bands and the
+extra-time share live in `sim/rules.py` keyed by season, with a
+`validate()` that refuses a format whose bands do not consume the clubs
+it claims. Adding next year's rules is an entry, not a rewrite. A season
+with no entry raises rather than silently assuming this year's rules
+still apply.
+
+### 6.3 Shot-based ratings: tested and rejected
+
+Goals are a noisy read of strength — a side can create six chances and
+score none. Shots on target carry four times as many events, so the same
+attack and defence structure fitted to them should be a steadier
+estimate, usable as the prior the goals model shrinks toward instead of
+"assume average".
+
+It was built, and it does nothing:
+
+| window | plain | with the prior | gain |
+|---|---|---|---|
+| European (1,981) | 0.2095 | 0.2095 | −0.00002 |
+| domestic (38,209) | 0.2178 | 0.2178 | −0.00003 |
+| thin-data clubs (6,723) | 0.2249 | 0.2250 | −0.00009 |
+
+The reason is not the method. It is where the data is:
+
+```
+training matches   clubs in the test window   have a shot prior
+0-20                                    246                  0%
+20-60                                    35                 20%
+150-400                                 262                 21%
+400+                                    374                 91%
+```
+
+football-data.co.uk records shots for the bigger divisions from the
+mid-2010s on — precisely the clubs whose goal record is already long
+enough that the ridge barely touches them. Changing what a
+well-evidenced club is shrunk *toward* changes nothing.
+
+**Of the 173 clubs in the European field with fewer than sixty matches
+behind them — the ones a prior exists to rescue — not one has shot
+data.**
+
+The code is kept, because the `prior` argument it drove into the goals
+model is a general capability: any better-measured signal can shrink the
+ratings toward it. Lineup and injury data would be the obvious
+candidate, and unlike shots it would reach the clubs that need it.
+
+---
+
 ## 7. Validation against a known season
 
 The strongest test available: retrain on data ending **July 2025**, then
@@ -777,11 +868,14 @@ archive. Their ratings come from European matches alone. Sabah has ten,
 so its numbers are the least trustworthy in the table and should be read
 as such.
 
-**Four tiebreakers are missing.** Implemented: points, goal difference,
-goals scored, away goals, wins, away wins. UEFA has four more after that
-(opponents' collective points, goal difference and goals, then
-disciplinary points). They decide roughly one simulated season in a
-thousand.
+**Two tiebreakers are missing and cannot be added.** Implemented:
+points, goal difference, goals scored, away goals, wins, away wins.
+UEFA then uses disciplinary points and club coefficient; the UEFA feed
+carries no cards and the draw file carries no coefficients, so both
+would have to be invented. Measured over 20,000 seasons, a tie survives
+all six criteria in 2.2% of seasons and changes who qualifies in 0.16%
+— one in 645. Those survivors are now broken at random rather than by
+club index.
 
 **No squad information.** No injuries, suspensions, transfers, manager
 changes or fixture congestion. This is most of the remaining gap to the
@@ -819,7 +913,7 @@ python scripts/evaluate_market.py     # model against the closing line
 python scripts/evaluate_calibration.py   # are the probabilities honest?
 python scripts/evaluate_simulator.py     # are the season ranges honest?
 python scripts/evaluate_uncertainty.py   # did sampling the ratings help?
-pytest                                # 179 tests
+pytest                                # 210 tests
 ```
 
 Training and bootstrapping happen **once**. Prediction and simulation
@@ -845,6 +939,7 @@ pitchiq/
     league_strength.py      per-country offset and scale
     outcome.py              rating gap -> outcome probabilities
     dixon_coles.py          attack/defence -> scorelines
+    shots.py                shot ratings as a prior (tested, rejected)
     boosted.py              gradient boosting over the feature layer
     ensemble.py             blend, plus calibrated scoreline grid
     uncertainty.py          bootstrap: error bars on every rating
@@ -853,6 +948,7 @@ pitchiq/
     tournament.py           Monte Carlo over the whole competition
     league.py               a domestic season, for validation at scale
     draws.py                spreads seasons across parameter draws
+    rules.py                competition format, versioned by season
   eval/
     metrics.py              RPS, log loss, Brier, odds de-vigging
     calibration.py          reliability curves and over-confidence
@@ -865,7 +961,7 @@ data/
   models/                   trained models and bootstrap samples (generated)
   predictions/              forecasts and simulation output (committed)
   raw/  processed/          downloaded and derived data (generated)
-tests/                      179 tests
+tests/                      210 tests
 ```
 
 ---
