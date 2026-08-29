@@ -284,10 +284,16 @@ def test_the_tournament_simulator_accepts_draws():
 def test_drawing_ratings_softens_the_favourite():
     """The change the whole exercise exists to produce.
 
-    With ratings held fixed the strongest club wins a fixed share of
-    seasons. Once the ratings are drawn, some seasons are played by a
-    version of that club we are less sure about, and its share of titles
-    must come down rather than up.
+    Measured on qualification, not on the trophy. Winning the
+    competition means surviving four knockout ties, which is already
+    close to four coin flips, so the title share is dominated by that
+    randomness and moves by less than Monte Carlo noise at any run count
+    a test can afford. The same thing shows in the real forecast:
+    Arsenal's title chance barely moves while Barcelona's top-eight
+    chance falls by nearly three points.
+
+    Qualification is where a single season's spread of results decides
+    things, and it is where drawing the ratings has to show up.
     """
     from pitchiq.sim import tournament
 
@@ -298,7 +304,9 @@ def test_drawing_ratings_softens_the_favourite():
     drawn = tournament.run(samples, samples.clubs, fixtures, runs=4000, seed=0)
 
     best = 0
-    assert (
-        drawn.reached["wins_it"][:, best].mean()
-        < fixed.reached["wins_it"][:, best].mean()
-    )
+    assert (drawn.position[:, best] <= 8).mean() < (fixed.position[:, best] <= 8).mean()
+
+    # And the club we know least about must gain, not lose: its rating
+    # could be better than the point estimate as easily as worse.
+    worst = len(samples.clubs) - 1
+    assert (drawn.position[:, worst] <= 8).mean() > (fixed.position[:, worst] <= 8).mean()

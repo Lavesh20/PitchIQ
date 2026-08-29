@@ -122,3 +122,106 @@ def test_league_means_use_domestic_matches_only():
     # 1800 and 1200 from the domestic match; the European one excluded.
     assert means["SCO"] == pytest.approx(1500.0)
     assert "ESP" not in means
+
+
+# --- how precise are the corrections? --------------------------------
+
+
+def european_record(seed: int = 0) -> pd.DataFrame:
+    """Cross-country matches where one league really is stronger.
+
+    Clubs from ``AAA`` are rated the same as clubs from ``BBB`` but win
+    far more often, so an honest fit must push ``AAA`` up. ``CCC``
+    appears in a handful of matches, so its correction should come back
+    with a visibly wider interval.
+    """
+    generator = np.random.default_rng(seed)
+    rows = []
+
+    def add(home_cc, away_cc, home_wins, n):
+        for _ in range(n):
+            won = generator.random() < home_wins
+            rows.append(
+                {
+                    "home_cc": home_cc,
+                    "away_cc": away_cc,
+                    "elo_home": 1600.0,
+                    "elo_away": 1600.0,
+                    "ftr": "H" if won else "A",
+                    "kind": "uefa",
+                }
+            )
+
+    add("AAA", "BBB", 0.80, 300)
+    add("BBB", "AAA", 0.35, 300)
+    add("CCC", "BBB", 0.40, 12)
+    add("BBB", "CCC", 0.60, 12)
+
+    return pd.DataFrame(rows)
+
+
+MEANS = {"AAA": 1600.0, "BBB": 1600.0, "CCC": 1600.0}
+
+
+@pytest.fixture(scope="module")
+def samples():
+    return league_strength.bootstrap(european_record(), MEANS, draws=40, seed=1)
+
+
+def test_bootstrap_recovers_the_stronger_league(samples):
+    assert samples.point.offsets["AAA"] > samples.point.offsets["BBB"]
+
+
+def test_a_thinly_evidenced_country_gets_a_wider_interval(samples):
+    """The whole point: precision must track how much evidence there is."""
+    table = samples.table().set_index("country")
+
+    thin = table.loc["CCC", "offset_high"] - table.loc["CCC", "offset_low"]
+    thick = table.loc["AAA", "offset_high"] - table.loc["AAA", "offset_low"]
+
+    assert thin > thick
+
+
+def test_intervals_bracket_the_point_estimate(samples):
+    table = samples.table()
+
+    assert (table.offset_low <= table.offset + 1e-9).all()
+    assert (table.offset_high >= table.offset - 1e-9).all()
+    assert (table.scale_low <= table.scale + 1e-9).all()
+    assert (table.scale_high >= table.scale - 1e-9).all()
+
+
+def test_certainty_flags_agree_with_the_intervals(samples):
+    table = samples.table()
+
+    for _, row in table.iterrows():
+        crosses_zero = row.offset_low <= 0 <= row.offset_high
+        assert row.offset_certain == (not crosses_zero)
+
+        crosses_one = row.scale_low <= 1 <= row.scale_high
+        assert row.scale_certain == (not crosses_one)
+
+
+def test_a_wider_level_gives_a_wider_interval(samples):
+    narrow = samples.table(level=0.5).set_index("country")
+    wide = samples.table(level=0.95).set_index("country")
+
+    for country in samples.countries:
+        assert (wide.loc[country, "offset_high"] - wide.loc[country, "offset_low"]) >= (
+            narrow.loc[country, "offset_high"] - narrow.loc[country, "offset_low"]
+        )
+
+
+def test_no_cross_country_matches_gives_empty_samples():
+    frame = pd.DataFrame(
+        {
+            "home_cc": ["AAA"], "away_cc": ["AAA"],
+            "elo_home": [1500.0], "elo_away": [1500.0],
+            "ftr": ["H"], "kind": ["uefa"],
+        }
+    )
+
+    samples = league_strength.bootstrap(frame, MEANS, draws=3)
+
+    assert samples.countries == []
+    assert samples.table().empty

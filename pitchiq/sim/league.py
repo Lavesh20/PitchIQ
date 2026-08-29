@@ -70,7 +70,7 @@ def positions(
     for parameters, count in draws.batches(model, runs, parameter_draws):
         grids = build_grids(parameters, keys)
         totals = league_phase(grids, home, away, count, generator)
-        order = rank(totals)
+        order = rank(totals, generator)
 
         # ``rank`` gives the club sitting at each position; invert it to
         # the position held by each club.

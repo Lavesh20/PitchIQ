@@ -196,6 +196,130 @@ def fit(
     )
 
 
+@dataclass
+class StrengthSamples:
+    """Per-country corrections across resamples of the European record."""
+
+    countries: list[str]
+    offsets: np.ndarray          # (draws, countries)
+    scales: np.ndarray           # (draws, countries)
+    counts: dict[str, int]
+    point: LeagueStrength
+
+    def table(self, level: float = 0.9) -> pd.DataFrame:
+        """Each country's correction with an interval and its evidence.
+
+        Read the interval against the point estimate. Romania's offset
+        rests on a few dozen European matches, and an interval that
+        comfortably contains zero is the honest way to say so — the
+        correction is the best guess available, not a measurement.
+        """
+        tail = (1.0 - level) / 2.0
+
+        if not self.countries:
+            # No cross-country evidence at all. An empty frame still has
+            # to carry the columns, or every caller has to special-case
+            # it before it can be filtered or joined.
+            return pd.DataFrame(
+                columns=[
+                    "country", "european_matches",
+                    "offset", "offset_low", "offset_high",
+                    "scale", "scale_low", "scale_high",
+                    "offset_certain", "scale_certain",
+                ]
+            )
+
+        rows = []
+        for i, country in enumerate(self.countries):
+            offset = self.offsets[:, i]
+            scale = self.scales[:, i]
+
+            rows.append(
+                {
+                    "country": country,
+                    "european_matches": self.counts.get(country, 0),
+                    "offset": self.point.offsets.get(country, 0.0),
+                    "offset_low": float(np.quantile(offset, tail)),
+                    "offset_high": float(np.quantile(offset, 1 - tail)),
+                    "scale": self.point.scales.get(country, 1.0),
+                    "scale_low": float(np.quantile(scale, tail)),
+                    "scale_high": float(np.quantile(scale, 1 - tail)),
+                }
+            )
+
+        table = pd.DataFrame(rows)
+        # A correction whose interval spans zero (or one, for a scale) is
+        # not evidence of anything; flagging it is cheaper than expecting
+        # every reader to check.
+        table["offset_certain"] = (table.offset_low > 0) | (table.offset_high < 0)
+        table["scale_certain"] = (table.scale_low > 1) | (table.scale_high < 1)
+
+        return table.sort_values("offset", ascending=False).reset_index(drop=True)
+
+
+def bootstrap(
+    european: pd.DataFrame,
+    means: dict[str, float],
+    home_advantage: float = 65.0,
+    offset_prior: float = 100.0,
+    scale_prior: float = 0.35,
+    draws: int = 200,
+    seed: int = 0,
+) -> StrengthSamples:
+    """Refit the corrections on resampled European matches.
+
+    The prior already shrinks a country in proportion to how little
+    evidence it has, because the error term grows with match count while
+    the penalty does not. What the prior cannot do is say how uncertain
+    the surviving correction is, and a −117 point offset reported to
+    three figures invites more confidence than forty matches can carry.
+
+    Ordinary resampling with replacement is used rather than the
+    Dirichlet weighting the Dixon-Coles bootstrap needs: here a country
+    dropping out of a resample entirely is informative rather than an
+    artefact, since it means the country barely plays in Europe.
+    """
+    point = fit(european, means, home_advantage, offset_prior, scale_prior)
+    countries = sorted(point.offsets)
+
+    if not countries:
+        return StrengthSamples(
+            countries=[],
+            offsets=np.empty((0, 0)),
+            scales=np.empty((0, 0)),
+            counts={},
+            point=point,
+        )
+
+    generator = np.random.default_rng(seed)
+    frame = european[
+        (european.home_cc != european.away_cc)
+        & european.home_cc.notna()
+        & european.away_cc.notna()
+    ]
+
+    offsets = np.zeros((draws, len(countries)))
+    scales = np.ones((draws, len(countries)))
+
+    for d in range(draws):
+        pick = generator.integers(0, len(frame), len(frame))
+        resampled = fit(
+            frame.iloc[pick], means, home_advantage, offset_prior, scale_prior
+        )
+
+        for i, country in enumerate(countries):
+            offsets[d, i] = resampled.offsets.get(country, 0.0)
+            scales[d, i] = resampled.scales.get(country, 1.0)
+
+    return StrengthSamples(
+        countries=countries,
+        offsets=offsets,
+        scales=scales,
+        counts=dict(point.counts),
+        point=point,
+    )
+
+
 def apply(history: pd.DataFrame, strength: LeagueStrength) -> pd.DataFrame:
     """Add league-adjusted ratings and rating difference to a history frame."""
     out = history.copy()
