@@ -39,7 +39,8 @@ def test_scale_below_one_compresses_toward_the_league_mean():
 
     assert adjusted[0] == pytest.approx(1700.0)
     assert adjusted[1] == pytest.approx(1300.0)
-    assert adjusted[0] - adjusted[1] == pytest.approx(400.0 * 0.5)
+    # The 800-point spread is halved, which is the whole point.
+    assert adjusted[0] - adjusted[1] == pytest.approx(800.0 * 0.5)
 
 
 def test_unknown_country_is_left_uncorrected():
