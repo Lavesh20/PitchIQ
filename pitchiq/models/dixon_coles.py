@@ -167,6 +167,7 @@ def fit(
     reference: pd.Timestamp | None = None,
     sample_weights: np.ndarray | None = None,
     start_from: "DixonColesResult | None" = None,
+    prior: "DixonColesResult | None" = None,
 ) -> DixonColesResult:
     """Maximise the weighted Dixon-Coles likelihood.
 
@@ -184,6 +185,13 @@ def fit(
     Two hundred bootstrap refits from a standing start is half an hour;
     from the point estimate, each one only has to travel as far as the
     resample moved it.
+
+    ``prior`` changes what the ridge penalty pulls toward. By default it
+    pulls every club to zero, which is the same as saying "when in doubt,
+    average". Given a prior it pulls toward that instead, which is how
+    ratings learned from shots on target inform the goals model: a club
+    with little goal evidence falls back on what its shots say rather
+    than on the league mean.
     """
     config = config or DixonColesConfig()
 
@@ -226,6 +234,17 @@ def fit(
 
     g = len(levels)
 
+    if prior is None:
+        prior_attack = np.zeros(n)
+        prior_defence = np.zeros(n)
+    else:
+        prior_attack = np.array(
+            [prior.attack.get(club, 0.0) for club in clubs]
+        )
+        prior_defence = np.array(
+            [prior.defence.get(club, 0.0) for club in clubs]
+        )
+
     def unpack(parameters):
         attack = parameters[:n]
         defence = parameters[n : 2 * n]
@@ -251,7 +270,10 @@ def fit(
             - mu + goals_away * log_mu
         )
 
-        penalty = config.ridge * (np.sum(attack**2) + np.sum(defence**2))
+        penalty = config.ridge * (
+            np.sum((attack - prior_attack) ** 2)
+            + np.sum((defence - prior_defence) ** 2)
+        )
 
         # Only the split between attack and defence is unidentified;
         # anchoring the mean attack fixes it.
@@ -294,9 +316,14 @@ def fit(
         np.add.at(grad_gamma, group, d_lam)
 
         gradient = np.empty(2 * n + g + 1)
-        gradient[:n] = -grad_attack + 2.0 * config.ridge * attack + \
-            2000.0 * np.mean(attack) / n
-        gradient[n : 2 * n] = -grad_defence + 2.0 * config.ridge * defence
+        gradient[:n] = (
+            -grad_attack
+            + 2.0 * config.ridge * (attack - prior_attack)
+            + 2000.0 * np.mean(attack) / n
+        )
+        gradient[n : 2 * n] = -grad_defence + 2.0 * config.ridge * (
+            defence - prior_defence
+        )
         gradient[2 * n : 2 * n + g] = -grad_gamma
         gradient[2 * n + g] = -np.sum(weights * d_tau_d_rho)
 
