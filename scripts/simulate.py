@@ -1,17 +1,38 @@
-"""Simulate the 2026/27 Champions League and save the results."""
+"""Simulate the 2026/27 Champions League and save the results.
 
+If a bootstrap of the ratings exists, the seasons are split across its
+draws so that our uncertainty about how good each club is reaches the
+forecast alongside the luck inside the matches. Without it the ratings
+are treated as exact, which is measurably over-confident: finishing
+positions regress on predicted positions with a slope of 0.83 rather
+than 1.0.
+
+Pass ``--fixed`` to force the old behaviour, which is what the A/B in
+``evaluate_uncertainty.py`` compares against.
+"""
+
+import sys
 import time
 
 import pandas as pd
 
 from pitchiq import clubs
 from pitchiq.config import DATA
+from pitchiq.models import dixon_coles as dc
 from pitchiq.models import store
+from pitchiq.models.uncertainty import ParameterSamples
 from pitchiq.sim import tournament
 
 RUNS = 10000
+SAMPLES = DATA / "models" / "uncertainty_2026-07-01.npz"
 
 model = store.load()
+
+if "--fixed" not in sys.argv and SAMPLES.exists():
+    model = ParameterSamples.load(SAMPLES, dc.DixonColesConfig(xi=0.0010, ridge=0.5))
+    print(f"using {model.draws} bootstrap draws of the ratings")
+else:
+    print("using point-estimate ratings; every season plays the same teams")
 
 squad = pd.read_csv(DATA / "external" / "ucl_2026_27_clubs.csv")
 pairs = pd.read_csv(DATA / "external" / "ucl_2026_27_pairings.csv")

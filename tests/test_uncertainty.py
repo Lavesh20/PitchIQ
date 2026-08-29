@@ -212,3 +212,93 @@ def test_sampling_widens_the_spread_of_finishing_positions(samples):
     _, drawn = league.positions(samples, fixtures, runs=1200, seed=0)
 
     assert drawn.std(axis=0).mean() > fixed.std(axis=0).mean()
+
+
+# --- the tournament path ---------------------------------------------
+# Its bracket is hard-wired to UEFA's 36-club format, so it needs a
+# 36-club set of draws. Building one directly rather than bootstrapping
+# a real fit keeps the test fast and lets the spread be chosen: club 0
+# is both the strongest and the one we are surest about.
+
+
+def synthetic_samples(n_clubs: int = 36, n_draws: int = 12, seed: int = 0):
+    generator = np.random.default_rng(seed)
+    clubs = [f"club_{i}" for i in range(n_clubs)]
+
+    centre = np.linspace(0.5, -0.5, n_clubs)
+    # Spread widens down the order, as it does in the real bootstrap:
+    # the clubs we have seen least are the ones at the bottom.
+    spread = np.linspace(0.02, 0.25, n_clubs)
+
+    attack = centre + generator.normal(0, 1, (n_draws, n_clubs)) * spread
+    defence = -centre + generator.normal(0, 1, (n_draws, n_clubs)) * spread
+
+    point = dc.DixonColesResult(
+        attack=dict(zip(clubs, centre)),
+        defence=dict(zip(clubs, -centre)),
+        home_advantage=0.25,
+        home_advantages={"all": 0.25},
+        rho=-0.04,
+        config=dc.DixonColesConfig(max_goals=6),
+        converged=True,
+        log_likelihood=float("nan"),
+    )
+
+    return uncertainty.ParameterSamples(
+        clubs=clubs,
+        attack=attack,
+        defence=defence,
+        home_advantages={"all": np.full(n_draws, 0.25)},
+        rho=np.full(n_draws, -0.04),
+        point=point,
+    )
+
+
+def tournament_fixtures(n: int = 36) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {"home": i, "away": (i + step) % n}
+            for i in range(n)
+            for step in (1, 2, 3, 4)
+        ]
+    )
+
+
+def test_the_tournament_simulator_accepts_draws():
+    """The knockout path batches separately from the league one."""
+    from pitchiq.sim import tournament
+
+    samples = synthetic_samples()
+    drawn = tournament.run(
+        samples, samples.clubs, tournament_fixtures(), runs=400, seed=0,
+        parameter_draws=8,
+    )
+
+    assert drawn.position.shape == (400, 36)
+    # Stitching blocks back together must not break the bracket.
+    assert drawn.reached["wins_it"].sum() == 400
+    assert drawn.reached["wins_it"].sum(axis=1).max() == 1
+    assert drawn.reached["quarter_finals"].sum(axis=1).tolist() == [8] * 400
+
+
+def test_drawing_ratings_softens_the_favourite():
+    """The change the whole exercise exists to produce.
+
+    With ratings held fixed the strongest club wins a fixed share of
+    seasons. Once the ratings are drawn, some seasons are played by a
+    version of that club we are less sure about, and its share of titles
+    must come down rather than up.
+    """
+    from pitchiq.sim import tournament
+
+    samples = synthetic_samples()
+    fixtures = tournament_fixtures()
+
+    fixed = tournament.run(samples.point, samples.clubs, fixtures, runs=4000, seed=0)
+    drawn = tournament.run(samples, samples.clubs, fixtures, runs=4000, seed=0)
+
+    best = 0
+    assert (
+        drawn.reached["wins_it"][:, best].mean()
+        < fixed.reached["wins_it"][:, best].mean()
+    )
