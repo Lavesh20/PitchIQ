@@ -340,11 +340,18 @@ refit**, and getting this wrong produced a misleading result at first:
 | | Frozen at cutoff | Refit as you go |
 |---|---|---|
 | Elo + league strength | 0.2191 | **0.2052** |
-| Dixon-Coles | **0.2092** | 0.2075 |
+| Dixon-Coles | **0.2095** | 0.2073 |
 | Ensemble (validated weight) | 0.2094 | **0.2040** |
 
 Elo collapses when frozen — one number per club goes stale fast.
 Dixon-Coles barely moves.
+
+*The Dixon-Coles row was re-measured against the current code and moved
+by 0.0002-0.0003 from the figures first published here; the other two
+rows are from the original run and have not been re-measured. The
+current four-model comparison, refit on one schedule for everybody, is
+in §5B and supersedes this table — which is kept because the point it
+makes about refit schedules is the reason §5B is built the way it is.*
 
 **Forecasting a whole league phase before a ball is kicked is the frozen
 case**, which is the actual job here, and Dixon-Coles wins it clearly.
