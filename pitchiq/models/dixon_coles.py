@@ -56,6 +56,13 @@ class DixonColesConfig:
     # influence the fit but still cost time.
     weight_floor: float = 1e-4
 
+    # Column whose levels each get their own home advantage. The fit is
+    # dominated by 300k domestic matches, so a single shared value
+    # describes domestic football and misdescribes European ties, which
+    # are more lopsided and produce fewer draws. Set to None for one
+    # shared value.
+    home_advantage_by: str | None = "kind"
+
 
 def _tau(goals_home, goals_away, lam, mu, rho):
     """Dixon-Coles correction for the four lowest scorelines."""
@@ -81,29 +88,32 @@ class DixonColesResult:
     attack: dict[str, float]
     defence: dict[str, float]
     home_advantage: float
+    home_advantages: dict[str, float]
     rho: float
     config: DixonColesConfig
     converged: bool
     log_likelihood: float
 
-    def rates(self, home: str, away: str) -> tuple[float, float]:
+    def rates(self, home: str, away: str, group: str | None = None) -> tuple[float, float]:
         """Expected goals for each side."""
         attack_home = self.attack.get(home, 0.0)
         attack_away = self.attack.get(away, 0.0)
         defence_home = self.defence.get(home, 0.0)
         defence_away = self.defence.get(away, 0.0)
 
+        gamma = self.home_advantages.get(group, self.home_advantage)
+
         return (
-            float(np.exp(attack_home + defence_away + self.home_advantage)),
+            float(np.exp(attack_home + defence_away + gamma)),
             float(np.exp(attack_away + defence_home)),
         )
 
-    def score_matrix(self, home: str, away: str) -> np.ndarray:
+    def score_matrix(self, home: str, away: str, group: str | None = None) -> np.ndarray:
         """Probability of every scoreline up to ``max_goals``.
 
         Rows are home goals, columns away goals.
         """
-        lam, mu = self.rates(home, away)
+        lam, mu = self.rates(home, away, group)
         size = self.config.max_goals + 1
 
         goals = np.arange(size)
@@ -117,9 +127,9 @@ class DixonColesResult:
 
         return grid / grid.sum()
 
-    def predict(self, home: str, away: str) -> dict[str, float]:
+    def predict(self, home: str, away: str, group: str | None = None) -> dict[str, float]:
         """Home / draw / away probabilities from the scoreline grid."""
-        grid = self.score_matrix(home, away)
+        grid = self.score_matrix(home, away, group)
 
         return {
             "H": float(np.tril(grid, -1).sum()),
@@ -175,16 +185,28 @@ def fit(
     goals_home = matches["fthg"].to_numpy().astype(float)
     goals_away = matches["ftag"].to_numpy().astype(float)
 
+    if config.home_advantage_by and config.home_advantage_by in matches:
+        levels = sorted(matches[config.home_advantage_by].dropna().unique())
+        group = matches[config.home_advantage_by].map(
+            {level: i for i, level in enumerate(levels)}
+        ).to_numpy()
+    else:
+        levels = ["all"]
+        group = np.zeros(len(matches), dtype=int)
+
+    g = len(levels)
+
     def unpack(parameters):
         attack = parameters[:n]
         defence = parameters[n : 2 * n]
+        gammas = parameters[2 * n : 2 * n + g]
 
-        return attack, defence, parameters[2 * n], parameters[2 * n + 1]
+        return attack, defence, gammas, parameters[2 * n + g]
 
     def negative_log_likelihood(parameters):
-        attack, defence, gamma, rho = unpack(parameters)
+        attack, defence, gammas, rho = unpack(parameters)
 
-        log_lam = attack[home] + defence[away] + gamma
+        log_lam = attack[home] + defence[away] + gammas[group]
         log_mu = attack[away] + defence[home]
 
         lam = np.exp(log_lam)
@@ -238,20 +260,23 @@ def fit(
         np.add.at(grad_defence, away, d_lam)
         np.add.at(grad_defence, home, d_mu)
 
-        gradient = np.empty(2 * n + 2)
+        grad_gamma = np.zeros(g)
+        np.add.at(grad_gamma, group, d_lam)
+
+        gradient = np.empty(2 * n + g + 1)
         gradient[:n] = -grad_attack + 2.0 * config.ridge * attack + \
             2000.0 * np.mean(attack) / n
         gradient[n : 2 * n] = -grad_defence + 2.0 * config.ridge * defence
-        gradient[2 * n] = -np.sum(d_lam)
-        gradient[2 * n + 1] = -np.sum(weights * d_tau_d_rho)
+        gradient[2 * n : 2 * n + g] = -grad_gamma
+        gradient[2 * n + g] = -np.sum(weights * d_tau_d_rho)
 
         return value, gradient
 
-    start = np.zeros(2 * n + 2)
-    start[2 * n] = 0.25          # home advantage in log-goal space
-    start[2 * n + 1] = -0.05     # rho is small and negative in practice
+    start = np.zeros(2 * n + g + 1)
+    start[2 * n : 2 * n + g] = 0.25   # home advantage in log-goal space
+    start[2 * n + g] = -0.05          # rho is small and negative in practice
 
-    bounds = [(None, None)] * (2 * n) + [(None, None), (-0.4, 0.4)]
+    bounds = [(None, None)] * (2 * n + g) + [(-0.4, 0.4)]
 
     fitted = minimize(
         negative_log_likelihood,
@@ -262,12 +287,15 @@ def fit(
         options={"maxiter": 500},
     )
 
-    attack, defence, gamma, rho = unpack(fitted.x)
+    attack, defence, gammas, rho = unpack(fitted.x)
+
+    by_group = {str(level): float(gammas[i]) for i, level in enumerate(levels)}
 
     return DixonColesResult(
         attack={club: float(attack[i]) for club, i in index.items()},
         defence={club: float(defence[i]) for club, i in index.items()},
-        home_advantage=float(gamma),
+        home_advantage=float(np.mean(gammas)),
+        home_advantages=by_group,
         rho=float(rho),
         config=config,
         converged=bool(fitted.success),

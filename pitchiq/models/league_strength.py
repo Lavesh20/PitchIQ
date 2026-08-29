@@ -126,8 +126,17 @@ def fit(
     index = {country: i for i, country in enumerate(countries)}
     n = len(countries)
 
-    home_index = frame.home_cc.map(index).to_numpy()
-    away_index = frame.away_cc.map(index).to_numpy()
+    # No cross-country matches means no evidence about how leagues
+    # compare, so the honest answer is to leave every rating alone.
+    if frame.empty or n == 0:
+        return LeagueStrength(
+            offsets={}, scales={}, means=dict(means), counts={},
+            home_advantage=home_advantage,
+            priors=(offset_prior, scale_prior),
+        )
+
+    home_index = frame.home_cc.map(index).to_numpy().astype(int)
+    away_index = frame.away_cc.map(index).to_numpy().astype(int)
 
     home_rating = frame.elo_home.to_numpy()
     away_rating = frame.elo_away.to_numpy()
