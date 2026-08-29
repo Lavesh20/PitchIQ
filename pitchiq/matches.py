@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from . import clubs
@@ -21,8 +22,26 @@ COLUMNS = [
     "match_id", "date", "kind", "competition", "tier", "season",
     "home_key", "away_key", "home_team", "away_team",
     "home_country", "away_country", "home_cc", "away_cc",
-    "fthg", "ftag", "ftr",
+    "stage", "fthg", "ftag", "ftr",
 ]
+
+# In-match detail, carried only when asked for. Football-data.uk records
+# it for the bigger leagues from the mid-2010s on and not at all before,
+# so these columns are sparse by nature: roughly 54% of matches since
+# 2015/16, nothing for UEFA ties, which arrive from openfootball with the
+# scoreline alone. Callers get NaN where a source is silent rather than a
+# zero, because "no shots recorded" and "no shots taken" are not the same
+# statement and a model must be able to tell them apart.
+STAT_SOURCE = {
+    "HS": "home_shots", "AS": "away_shots",
+    "HST": "home_sot", "AST": "away_sot",
+    "HC": "home_corners", "AC": "away_corners",
+    "HF": "home_fouls", "AF": "away_fouls",
+    "HY": "home_yellows", "AY": "away_yellows",
+    "HR": "home_reds", "AR": "away_reds",
+}
+
+STAT_COLUMNS = ["hthg", "htag"] + list(STAT_SOURCE.values())
 
 # Continental competitions ranked by the standard of the field. Feeds
 # the initial rating for a club that first appears in Europe, and lets
@@ -33,7 +52,7 @@ UEFA_TIERS = {
 }
 
 
-def _domestic() -> pd.DataFrame:
+def _domestic(stats: bool = False) -> pd.DataFrame:
     df = pd.read_parquet(DOMESTIC)
 
     out = pd.DataFrame(
@@ -48,6 +67,10 @@ def _domestic() -> pd.DataFrame:
             "away_team": df["away_team"],
             "home_country": df["country"],
             "away_country": df["country"],
+            # A domestic league has no rounds to speak of, so every row
+            # gets the same label rather than a missing one; that keeps
+            # the column a clean categorical downstream.
+            "stage": "LEAGUE",
             "fthg": df["fthg"],
             "ftag": df["ftag"],
             "ftr": df["ftr"],
@@ -61,10 +84,16 @@ def _domestic() -> pd.DataFrame:
         clubs.resolve(n, c) for n, c in zip(df["away_team"], df["country"])
     ]
 
+    if stats:
+        out["hthg"] = pd.to_numeric(df["hthg"], errors="coerce")
+        out["htag"] = pd.to_numeric(df["htag"], errors="coerce")
+        for source, name in STAT_SOURCE.items():
+            out[name] = pd.to_numeric(df[source], errors="coerce")
+
     return out
 
 
-def _uefa() -> pd.DataFrame:
+def _uefa(stats: bool = False) -> pd.DataFrame:
     df = pd.read_parquet(UEFA)
 
     out = pd.DataFrame(
@@ -78,6 +107,7 @@ def _uefa() -> pd.DataFrame:
             "away_team": df["away_team"],
             "home_country": df["home_country"],
             "away_country": df["away_country"],
+            "stage": df["stage"],
             "fthg": df["fthg"],
             "ftag": df["ftag"],
             "ftr": df["ftr"],
@@ -98,6 +128,10 @@ def _uefa() -> pd.DataFrame:
         + out["away_key"].str.replace(" ", "", regex=False)
     )
 
+    if stats:
+        for name in STAT_COLUMNS:
+            out[name] = np.nan
+
     return out
 
 
@@ -105,6 +139,7 @@ def load(
     since: str | None = None,
     domestic: bool = True,
     uefa: bool = True,
+    stats: bool = False,
 ) -> pd.DataFrame:
     """Every played match, in date order, with resolved club keys.
 
@@ -115,10 +150,10 @@ def load(
     frames = []
 
     if domestic:
-        frames.append(_domestic())
+        frames.append(_domestic(stats))
 
     if uefa:
-        frames.append(_uefa())
+        frames.append(_uefa(stats))
 
     df = pd.concat(frames, ignore_index=True)
 
@@ -142,4 +177,6 @@ def load(
     # because Elo updates are order-dependent.
     df = df.sort_values(["date", "competition", "home_key"], kind="mergesort")
 
-    return df[COLUMNS].reset_index(drop=True)
+    columns = COLUMNS + STAT_COLUMNS if stats else COLUMNS
+
+    return df[columns].reset_index(drop=True)
