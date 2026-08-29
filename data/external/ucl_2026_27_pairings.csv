@@ -1,0 +1,145 @@
+home,away,pot_home,pot_away,uefa_id_home,uefa_id_away
+Arsenal,Borussia Dortmund,1,2,52280,52758
+Arsenal,Lille,1,3,52280,75797
+Arsenal,Real Madrid,1,1,52280,50051
+Arsenal,Sabah,1,4,52280,2609356
+Atlético Madrid,Bayern Munich,1,1,50124,50037
+Atlético Madrid,Fenerbahçe,1,3,50124,52692
+Atlético Madrid,Manchester United,1,2,50124,52682
+Atlético Madrid,Viking,1,4,50124,52319
+Barcelona,Aston Villa,1,2,50080,52683
+Barcelona,Como,1,4,50080,79946
+Barcelona,Feyenoord,1,3,50080,52749
+Barcelona,Manchester City,1,1,50080,52919
+Bayern Munich,Arsenal,1,1,50037,52280
+Bayern Munich,Bodø/Glimt,1,3,50037,59333
+Bayern Munich,Real Betis,1,2,50037,52265
+Bayern Munich,Slavia Prague,1,4,50037,52498
+Inter Milan,Club Brugge,1,2,50138,50043
+Inter Milan,Liverpool,1,1,50138,7889
+Inter Milan,Shakhtar Donetsk,1,3,50138,52707
+Inter Milan,VfB Stuttgart,1,4,50138,50107
+Liverpool,Atlético Madrid,1,1,7889,50124
+Liverpool,Lens,1,4,7889,52277
+Liverpool,Porto,1,2,7889,50064
+Liverpool,Villarreal,1,3,7889,70691
+Manchester City,AEK Athens,1,4,52919,50129
+Manchester City,Napoli,1,3,52919,50136
+Manchester City,Paris Saint-Germain,1,1,52919,52747
+Manchester City,Sporting CP,1,2,52919,50149
+Paris Saint-Germain,Barcelona,1,1,52747,50080
+Paris Saint-Germain,Galatasaray,1,3,52747,50067
+Paris Saint-Germain,Roma,1,2,52747,50137
+Paris Saint-Germain,Slovan Bratislava,1,4,52747,52797
+Real Madrid,Inter Milan,1,1,50051,50138
+Real Madrid,LASK,1,4,50051,63405
+Real Madrid,PSV Eindhoven,1,2,50051,50062
+Real Madrid,RB Leipzig,1,3,50051,2603790
+Aston Villa,Borussia Dortmund,2,2,52683,52758
+Aston Villa,Fenerbahçe,2,3,52683,52692
+Aston Villa,Paris Saint-Germain,2,1,52683,52747
+Aston Villa,Viking,2,4,52683,52319
+Borussia Dortmund,AEK Athens,2,4,52758,50129
+Borussia Dortmund,Inter Milan,2,1,52758,50138
+Borussia Dortmund,Real Betis,2,2,52758,52265
+Borussia Dortmund,Villarreal,2,3,52758,70691
+Club Brugge,Aston Villa,2,2,50043,52683
+Club Brugge,Bodø/Glimt,2,3,50043,59333
+Club Brugge,Lens,2,4,50043,52277
+Club Brugge,Liverpool,2,1,50043,7889
+Manchester United,Bayern Munich,2,1,52682,50037
+Manchester United,RB Leipzig,2,3,52682,2603790
+Manchester United,Roma,2,2,52682,50137
+Manchester United,Sabah,2,4,52682,2609356
+PSV Eindhoven,Atlético Madrid,2,1,50062,50124
+PSV Eindhoven,Club Brugge,2,2,50062,50043
+PSV Eindhoven,Shakhtar Donetsk,2,3,50062,52707
+PSV Eindhoven,VfB Stuttgart,2,4,50062,50107
+Porto,Manchester City,2,1,50064,52919
+Porto,Napoli,2,3,50064,50136
+Porto,PSV Eindhoven,2,2,50064,50062
+Porto,Slavia Prague,2,4,50064,52498
+Real Betis,Arsenal,2,1,52265,52280
+Real Betis,Como,2,4,52265,79946
+Real Betis,Feyenoord,2,3,52265,52749
+Real Betis,Porto,2,2,52265,50064
+Roma,Lille,2,3,50137,75797
+Roma,Real Madrid,2,1,50137,50051
+Roma,Slovan Bratislava,2,4,50137,52797
+Roma,Sporting CP,2,2,50137,50149
+Sporting CP,Barcelona,2,1,50149,50080
+Sporting CP,Galatasaray,2,3,50149,50067
+Sporting CP,LASK,2,4,50149,63405
+Sporting CP,Manchester United,2,2,50149,52682
+Bodø/Glimt,Atlético Madrid,3,1,59333,50124
+Bodø/Glimt,Borussia Dortmund,3,2,59333,52758
+Bodø/Glimt,LASK,3,4,59333,63405
+Bodø/Glimt,Lille,3,3,59333,75797
+Fenerbahçe,Liverpool,3,1,52692,7889
+Fenerbahçe,Roma,3,2,52692,50137
+Fenerbahçe,Slavia Prague,3,4,52692,52498
+Fenerbahçe,Villarreal,3,3,52692,70691
+Feyenoord,Como,3,4,52749,79946
+Feyenoord,Inter Milan,3,1,52749,50138
+Feyenoord,Porto,3,2,52749,50064
+Feyenoord,RB Leipzig,3,3,52749,2603790
+Galatasaray,Aston Villa,3,2,50067,52683
+Galatasaray,Barcelona,3,1,50067,50080
+Galatasaray,Feyenoord,3,3,50067,52749
+Galatasaray,VfB Stuttgart,3,4,50067,50107
+Lille,Bayern Munich,3,1,75797,50037
+Lille,Galatasaray,3,3,75797,50067
+Lille,Real Betis,3,2,75797,52265
+Lille,Slovan Bratislava,3,4,75797,52797
+Napoli,Arsenal,3,1,50136,52280
+Napoli,Bodø/Glimt,3,3,50136,59333
+Napoli,Club Brugge,3,2,50136,50043
+Napoli,Viking,3,4,50136,52319
+RB Leipzig,Lens,3,4,2603790,52277
+RB Leipzig,Manchester City,3,1,2603790,52919
+RB Leipzig,PSV Eindhoven,3,2,2603790,50062
+RB Leipzig,Shakhtar Donetsk,3,3,2603790,52707
+Shakhtar Donetsk,AEK Athens,3,4,52707,50129
+Shakhtar Donetsk,Fenerbahçe,3,3,52707,52692
+Shakhtar Donetsk,Real Madrid,3,1,52707,50051
+Shakhtar Donetsk,Sporting CP,3,2,52707,50149
+Villarreal,Manchester United,3,2,70691,52682
+Villarreal,Napoli,3,3,70691,50136
+Villarreal,Paris Saint-Germain,3,1,70691,52747
+Villarreal,Sabah,3,4,70691,2609356
+AEK Athens,Galatasaray,4,3,50129,50067
+AEK Athens,LASK,4,4,50129,63405
+AEK Athens,Real Madrid,4,1,50129,50051
+AEK Athens,Roma,4,2,50129,50137
+Como,AEK Athens,4,4,79946,50129
+Como,Manchester United,4,2,79946,52682
+Como,Paris Saint-Germain,4,1,79946,52747
+Como,RB Leipzig,4,3,79946,2603790
+LASK,Fenerbahçe,4,3,63405,52692
+LASK,Liverpool,4,1,63405,7889
+LASK,Porto,4,2,63405,50064
+LASK,Slovan Bratislava,4,4,63405,52797
+Lens,Bodø/Glimt,4,3,52277,59333
+Lens,Como,4,4,52277,79946
+Lens,Manchester City,4,1,52277,52919
+Lens,Sporting CP,4,2,52277,50149
+Sabah,Barcelona,4,1,2609356,50080
+Sabah,Borussia Dortmund,4,2,2609356,52758
+Sabah,Napoli,4,3,2609356,50136
+Sabah,Slavia Prague,4,4,2609356,52498
+Slavia Prague,Arsenal,4,1,52498,52280
+Slavia Prague,Aston Villa,4,2,52498,52683
+Slavia Prague,Lens,4,4,52498,52277
+Slavia Prague,Villarreal,4,3,52498,70691
+Slovan Bratislava,Inter Milan,4,1,52797,50138
+Slovan Bratislava,Real Betis,4,2,52797,52265
+Slovan Bratislava,Shakhtar Donetsk,4,3,52797,52707
+Slovan Bratislava,VfB Stuttgart,4,4,52797,50107
+VfB Stuttgart,Atlético Madrid,4,1,50107,50124
+VfB Stuttgart,Club Brugge,4,2,50107,50043
+VfB Stuttgart,Lille,4,3,50107,75797
+VfB Stuttgart,Viking,4,4,50107,52319
+Viking,Bayern Munich,4,1,52319,50037
+Viking,Feyenoord,4,3,52319,52749
+Viking,PSV Eindhoven,4,2,52319,50062
+Viking,Sabah,4,4,52319,2609356

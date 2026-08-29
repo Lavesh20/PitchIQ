@@ -1,0 +1,37 @@
+club,country,pot,uefa_id,domestic_league,route
+Paris Saint-Germain,FRA,1,52747,Ligue 1,1st (title holders)
+Bayern Munich,GER,1,50037,Bundesliga,1st
+Real Madrid,ESP,1,50051,LaLiga,2nd
+Liverpool,ENG,1,7889,Premier League,5th (EPS)
+Inter Milan,ITA,1,50138,Serie A,1st
+Manchester City,ENG,1,52919,Premier League,2nd
+Arsenal,ENG,1,52280,Premier League,1st
+Barcelona,ESP,1,50080,LaLiga,1st
+Atlético Madrid,ESP,1,50124,LaLiga,4th
+Borussia Dortmund,GER,2,52758,Bundesliga,2nd
+Roma,ITA,2,50137,Serie A,3rd
+Sporting CP,POR,2,50149,Primeira Liga,2nd
+Aston Villa,ENG,2,52683,Premier League,4th (EL holders)
+Porto,POR,2,50064,Primeira Liga,1st
+Manchester United,ENG,2,52682,Premier League,3rd
+Club Brugge,BEL,2,50043,Belgian Pro League,1st
+Real Betis,ESP,2,52265,LaLiga,5th (EPS)
+PSV Eindhoven,NED,2,50062,Eredivisie,1st
+Feyenoord,NED,3,52749,Eredivisie,2nd
+Lille,FRA,3,75797,Ligue 1,3rd
+Bodø/Glimt,NOR,3,59333,Eliteserien,2nd (PO-LP)
+Napoli,ITA,3,50136,Serie A,2nd
+RB Leipzig,GER,3,2603790,Bundesliga,3rd
+Villarreal,ESP,3,70691,LaLiga,3rd
+Fenerbahçe,TUR,3,52692,Super Lig,2nd (PO-LP)
+Shakhtar Donetsk,UKR,3,52707,Ukrainian Premier League,1st
+Galatasaray,TUR,3,50067,Super Lig,1st
+Slavia Prague,CZE,4,52498,Czech First League,1st
+Slovan Bratislava,SVK,4,52797,Slovak Nike liga,1st (PO-CH)
+VfB Stuttgart,GER,4,50107,Bundesliga,4th
+AEK Athens,GRE,4,50129,Super League Greece,1st (PO-CH)
+LASK,AUT,4,63405,Austrian Bundesliga,1st (PO-CH)
+Como,ITA,4,79946,Serie A,4th
+Lens,FRA,4,52277,Ligue 1,2nd
+Viking,NOR,4,52319,Eliteserien,1st (PO-CH)
+Sabah,AZE,4,2609356,Azerbaijan Premier League,1st (PO-CH)
