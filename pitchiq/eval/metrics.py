@@ -48,6 +48,26 @@ def ranked_probability_score(probabilities: np.ndarray, actual) -> float:
     return float(np.mean(np.sum((forecast - truth) ** 2, axis=1) / (len(OUTCOMES) - 1)))
 
 
+def brier_score(probabilities: np.ndarray, actual) -> float:
+    """Mean squared error of the probability vector.
+
+    Where RPS respects the order of the outcomes, Brier does not: it
+    treats home, draw and away as three unrelated labels. That makes it
+    the blunter measure of the two for football, and the reason to
+    report it anyway is that it decomposes cleanly into calibration and
+    resolution, which RPS does not. Lower is better.
+
+    Scaled so a perfect forecast is 0 and always predicting the wrong
+    outcome with certainty is 1, matching the two-class convention.
+    """
+    index = _as_index(actual)
+
+    observed = np.zeros_like(probabilities)
+    observed[np.arange(len(index)), index] = 1.0
+
+    return float(np.mean(np.sum((probabilities - observed) ** 2, axis=1)) / 2)
+
+
 def accuracy(probabilities: np.ndarray, actual) -> float:
     return float(np.mean(np.argmax(probabilities, axis=1) == _as_index(actual)))
 
@@ -57,6 +77,7 @@ def summary(probabilities: np.ndarray, actual) -> dict[str, float]:
         "n": len(actual),
         "rps": ranked_probability_score(probabilities, actual),
         "log_loss": log_loss(probabilities, actual),
+        "brier": brier_score(probabilities, actual),
         "accuracy": accuracy(probabilities, actual),
     }
 
