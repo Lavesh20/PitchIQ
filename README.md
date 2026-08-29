@@ -133,6 +133,13 @@ matches plus a league prior. Sabah has ten such matches, so its
 predictions will carry wide uncertainty, and are reported as such rather
 than presented with false confidence.
 
+## Documentation
+
+[`docs/how-it-works.md`](docs/how-it-works.md) — the full account: data
+sources, name resolution, each model and why it exists, the evaluation
+method and results, the simulator, validation against 2025/26, and the
+known limitations.
+
 ## Licence
 
 MIT. See `LICENSE`.
