@@ -244,12 +244,52 @@ def run(
     fixtures: pd.DataFrame,
     runs: int = 10000,
     seed: int = 0,
+    parameter_draws: int | None = None,
 ) -> Simulation:
     """Simulate the whole competition ``runs`` times.
 
     ``keys`` are the 36 club keys in a fixed order; ``fixtures`` needs
     ``home`` and ``away`` columns holding indices into that list.
+
+    Pass a set of bootstrap draws rather than a single fitted model and
+    the seasons are split across them, so the output carries our
+    uncertainty about how good each club is alongside the luck inside
+    the matches. With one model the ratings are treated as exact, which
+    is the older behaviour and remains the right comparison to measure
+    the change against.
     """
+    from . import draws as parameter_batches
+
+    if parameter_batches.is_sampled(model):
+        parts = [
+            _run_once(parameters, keys, fixtures, count, seed + i)
+            for i, (parameters, count) in enumerate(
+                parameter_batches.batches(model, runs, parameter_draws)
+            )
+        ]
+
+        return Simulation(
+            clubs=keys,
+            runs=runs,
+            points=np.vstack([p.points for p in parts]),
+            position=np.vstack([p.position for p in parts]),
+            reached={
+                stage: np.vstack([p.reached[stage] for p in parts])
+                for stage in parts[0].reached
+            },
+        )
+
+    return _run_once(model, keys, fixtures, runs, seed)
+
+
+def _run_once(
+    model,
+    keys: list[str],
+    fixtures: pd.DataFrame,
+    runs: int,
+    seed: int,
+) -> Simulation:
+    """One block of seasons, all played with the same ratings."""
     rng = np.random.default_rng(seed)
 
     grids = build_grids(model, keys)

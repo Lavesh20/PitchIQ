@@ -22,6 +22,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from . import draws
 from .tournament import build_grids, league_phase, rank
 
 
@@ -39,12 +40,19 @@ def positions(
     season: pd.DataFrame,
     runs: int = 2000,
     seed: int = 0,
+    parameter_draws: int | None = None,
 ) -> tuple[list[str], np.ndarray]:
     """Finishing position of every club, once per simulated season.
 
     Returns the club keys and a ``(runs, clubs)`` array of 1-based
     positions. The real fixture list is replayed rather than a generated
     one, so home and away are where they actually were.
+
+    ``model`` may be a single fitted model, in which case every season
+    is played with identical ratings, or a set of bootstrap draws, in
+    which case the seasons are split across them and our uncertainty
+    about the ratings widens the spread of finishing positions along
+    with the luck inside the matches.
 
     Ordering uses the UEFA tiebreakers from the tournament simulator:
     points, goal difference, goals scored, then away goals and wins.
@@ -57,19 +65,25 @@ def positions(
     home, away = _fixtures(season, keys)
 
     generator = np.random.default_rng(seed)
-    grids = build_grids(model, keys)
-    totals = league_phase(grids, home, away, runs, generator)
+    blocks = []
 
-    order = rank(totals)
+    for parameters, count in draws.batches(model, runs, parameter_draws):
+        grids = build_grids(parameters, keys)
+        totals = league_phase(grids, home, away, count, generator)
+        order = rank(totals)
 
-    # ``rank`` gives the club sitting at each position; invert it to the
-    # position held by each club.
-    placing = np.empty_like(order)
-    np.put_along_axis(
-        placing, order, np.arange(1, order.shape[1] + 1)[None, :].repeat(len(order), 0), axis=1
-    )
+        # ``rank`` gives the club sitting at each position; invert it to
+        # the position held by each club.
+        placing = np.empty_like(order)
+        np.put_along_axis(
+            placing,
+            order,
+            np.arange(1, order.shape[1] + 1)[None, :].repeat(len(order), 0),
+            axis=1,
+        )
+        blocks.append(placing)
 
-    return keys, placing
+    return keys, np.vstack(blocks)
 
 
 def interval(placing: np.ndarray, level: float = 0.9) -> tuple[np.ndarray, np.ndarray]:

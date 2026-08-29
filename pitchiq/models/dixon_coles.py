@@ -63,6 +63,12 @@ class DixonColesConfig:
     # shared value.
     home_advantage_by: str | None = "kind"
 
+    # Optimiser iteration cap. The default is generous enough for a
+    # cold fit; a bootstrap refit warm-started from the point estimate
+    # only has to travel as far as the resample moved it, and can be
+    # capped far lower without materially changing where it lands.
+    max_iterations: int = 500
+
 
 def _tau(goals_home, goals_away, lam, mu, rho):
     """Dixon-Coles correction for the four lowest scorelines."""
@@ -159,12 +165,25 @@ def fit(
     matches: pd.DataFrame,
     config: DixonColesConfig | None = None,
     reference: pd.Timestamp | None = None,
+    sample_weights: np.ndarray | None = None,
+    start_from: "DixonColesResult | None" = None,
 ) -> DixonColesResult:
     """Maximise the weighted Dixon-Coles likelihood.
 
     Gradients are analytic; a numerical gradient over three thousand
     parameters would need three thousand likelihood evaluations per
     step and is not practical.
+
+    ``sample_weights`` multiplies the time-decay weight of each match,
+    which is how :mod:`pitchiq.models.uncertainty` resamples the record
+    to find out how firmly each rating is pinned down. It is applied
+    after the decay floor, so which matches take part is decided by
+    their age alone and does not shift from one resample to the next.
+
+    ``start_from`` seeds the optimiser with an already-fitted result.
+    Two hundred bootstrap refits from a standing start is half an hour;
+    from the point estimate, each one only has to travel as far as the
+    resample moved it.
     """
     config = config or DixonColesConfig()
 
@@ -175,6 +194,17 @@ def fit(
     keep = weights >= config.weight_floor
     matches = matches[keep]
     weights = weights[keep]
+
+    if sample_weights is not None:
+        sample_weights = np.asarray(sample_weights, dtype=float)
+
+        if len(sample_weights) != len(keep):
+            raise ValueError(
+                f"sample_weights has {len(sample_weights)} entries for "
+                f"{len(keep)} matches"
+            )
+
+        weights = weights * sample_weights[keep]
 
     clubs = sorted(set(matches["home_key"]) | set(matches["away_key"]))
     index = {club: i for i, club in enumerate(clubs)}
@@ -276,6 +306,20 @@ def fit(
     start[2 * n : 2 * n + g] = 0.25   # home advantage in log-goal space
     start[2 * n + g] = -0.05          # rho is small and negative in practice
 
+    if start_from is not None:
+        # A club absent from the seed keeps the neutral zero rather than
+        # borrowing another club's rating.
+        for club, i in index.items():
+            start[i] = start_from.attack.get(club, 0.0)
+            start[n + i] = start_from.defence.get(club, 0.0)
+
+        for i, level in enumerate(levels):
+            start[2 * n + i] = start_from.home_advantages.get(
+                str(level), start_from.home_advantage
+            )
+
+        start[2 * n + g] = np.clip(start_from.rho, -0.4, 0.4)
+
     bounds = [(None, None)] * (2 * n + g) + [(-0.4, 0.4)]
 
     fitted = minimize(
@@ -284,7 +328,7 @@ def fit(
         jac=True,
         method="L-BFGS-B",
         bounds=bounds,
-        options={"maxiter": 500},
+        options={"maxiter": config.max_iterations},
     )
 
     attack, defence, gammas, rho = unpack(fitted.x)
