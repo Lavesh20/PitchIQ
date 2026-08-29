@@ -13,6 +13,7 @@ reports/figures/
 *.egg-info/
 .pytest_cache/
 
-# Internal planning docs - local only. Only docs/how-it-works.md ships.
+# Internal planning docs stay local. Only the two written for readers ship.
 docs/*
 !docs/how-it-works.md
+!docs/architecture.md
