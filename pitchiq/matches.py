@@ -20,7 +20,7 @@ UEFA = PROCESSED / "uefa_matches.parquet"
 COLUMNS = [
     "match_id", "date", "kind", "competition", "tier", "season",
     "home_key", "away_key", "home_team", "away_team",
-    "home_country", "away_country",
+    "home_country", "away_country", "home_cc", "away_cc",
     "fthg", "ftag", "ftr",
 ]
 
@@ -128,6 +128,11 @@ def load(
 
     df["fthg"] = df["fthg"].astype(int)
     df["ftag"] = df["ftag"].astype(int)
+
+    # Domestic rows name the country ("England"), UEFA rows code it
+    # ("ENG"). League-level work needs one vocabulary.
+    df["home_cc"] = [clubs.country_code(c) for c in df["home_country"]]
+    df["away_cc"] = [clubs.country_code(c) for c in df["away_country"]]
 
     if since:
         df = df[df["date"] >= since]
