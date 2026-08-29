@@ -12,3 +12,7 @@ data/models/
 reports/figures/
 *.egg-info/
 .pytest_cache/
+
+# Internal planning docs - local only. Only docs/how-it-works.md ships.
+docs/*
+!docs/how-it-works.md
