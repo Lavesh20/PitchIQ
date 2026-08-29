@@ -349,11 +349,217 @@ Dixon-Coles barely moves.
 **Forecasting a whole league phase before a ball is kicked is the frozen
 case**, which is the actual job here, and Dixon-Coles wins it clearly.
 Updating predictions as a season unfolds is the rolling case, where Elo
-is slightly ahead and blending helps.
+is slightly ahead.
 
 An early version compared rolling Elo against frozen Dixon-Coles and
 concluded Elo was better. That was measuring the refit schedule, not the
 models.
+
+### A correction to an earlier claim
+
+This document previously presented the ensemble as an improvement. A
+paired bootstrap does not support that:
+
+```
+ensemble vs elo + league strength   -0.0012   p ~ 0.135   NOT significant
+ensemble vs dixon-coles             -0.0052   p ~ 0.000   significant
+elo + league strength vs elo        -0.0028   p ~ 0.027   significant
+```
+
+The league-strength correction is real. **The ensemble's edge over its
+own best component is not established.** On 1,981 European matches a
+difference of 0.0012 is indistinguishable from luck, and the honest
+statement is that the blend and its best part cannot be told apart.
+
+Every comparison in the rest of this document ships with an interval
+for that reason.
+
+---
+
+## 5A. The feature layer
+
+The models above see four things per match: two clubs, the goals, the
+date. Nothing about form, fatigue, or a side creating chances and
+missing them.
+
+55 numbers were added, all knowable **before kick-off**: form over 3, 5
+and 10 matches; goals for and against; home-only and away-only records;
+days since the last match and matches in the last fortnight; shots and
+shots on target; head-to-head; Elo; and fixture context.
+
+### Leakage, and why the loop is slow on purpose
+
+A feature that accidentally contains information from after the match
+is catastrophic *and* invisible: scores improve, everything looks
+brilliant, and the model is worthless in use.
+
+The usual construction is a rolling window plus a `shift`, and a hope
+that the shift is right. That was rejected. Instead the code walks the
+fixture list in date order holding per-club memory and, for each match,
+reads the memory and writes the row **before** folding that match's
+result in. A match cannot see itself, because its result has not
+arrived when its row is written.
+
+The property is structural rather than a rule to be maintained. It is
+tested anyway: alter any match to 9–0, rebuild, and assert nothing at or
+before it moves — plus the mirror test, that altering a result *must*
+change the next row, since code returning zeroes would pass the first
+test perfectly.
+
+Cost: 40 seconds instead of 3.
+
+### Do the features earn their place?
+
+Same model class, same split, same rows; only the columns vary.
+
+| | RPS on 38,869 held-out matches |
+|---|---|
+| Elo alone | 0.2101 |
+| **Elo + features** | **0.2091** |
+| features without Elo | 0.2127 |
+
+```
+gain +0.00106 RPS   95% CI [+0.00073, +0.00138]
+```
+
+Real, and small. Note the third row: **Elo still carries most of the
+signal**. Form and rest add on top; they do not replace it.
+
+---
+
+## 5B. Gradient boosting
+
+The fourth model the plan asked for. Not a downloaded brain — a blank
+algorithm that builds a small decision tree, sees where it was wrong,
+builds another to fix those mistakes, and repeats a few hundred times.
+
+It can express what a formula cannot: *a short rest hurts, but only
+after a European away leg.*
+
+Walk-forward by season, every model refit at each boundary:
+
+| | All 37,765 | European 1,359 |
+|---|---|---|
+| base rate | 0.2282 | 0.2314 |
+| dixon-coles | 0.2141 | **0.2054** |
+| elo | 0.2099 | 0.2092 |
+| logistic on the same features | 0.2088 | 0.2103 |
+| **gradient boosting** | **0.2085** | 0.2085 |
+
+| Comparison | All | European |
+|---|---|---|
+| boosting vs logistic | +0.00033 **sig** | +0.00177 **sig** |
+| boosting vs elo | +0.00132 **sig** | +0.00067 not sig |
+| boosting vs dixon-coles | +0.00552 **sig** | −0.00309 **not sig** |
+
+Two separate findings. **On domestic football boosting wins clearly.**
+**On European football nothing is distinguishable** — every interval
+crosses zero, because 1,359 matches cannot separate forecasts differing
+by 0.003.
+
+What the trees actually use:
+
+```
+elo_diff           206      <- dominates
+elo_expected       122
+form over 10        23
+form over 3         17
+shots on target     13      <- the unused columns earn their place
+rest days            9
+```
+
+Read honestly: **boosting is "Elo, with small corrections."**
+
+### The refit-schedule trap, again
+
+The first run of this comparison showed boosting ahead by 0.0084. That
+number was junk: Dixon-Coles was fitted once and asked to predict three
+years forward while boosting's Elo features kept updating. Refitting
+both per season cut the gap to 0.0055.
+
+**A third of the apparent gain was refit schedule.** The same mistake as
+before, in a new place.
+
+**Dixon-Coles stays regardless.** Boosting predicts win/draw/loss, never
+2–1, and the league phase is settled on goal difference.
+
+---
+
+## 5C. Against the bookmakers
+
+The plan asks three questions and only two had been answered. The third
+is the one that matters: **do we know anything the market does not?**
+
+If we do, blending should beat the market alone.
+
+36,325 priced domestic matches, walk-forward:
+
+```
+market closing line    0.2036   <- best
+stacked                0.2035
+model + market         0.2036
+gradient boosting      0.2086
+base rate              0.2281
+```
+
+Three attempts to find an edge:
+
+- **Linear blend** — the validation year chose **0% weight on the
+  model**, in all three folds, off a curve that rises from the first
+  step. Every drop of model made it worse.
+- **Log-odds stacking**, which can reshape rather than only slide:
+  +0.00009 RPS, CI [−0.00005, +0.00022]. Nothing.
+- **By division** — no soft spot. Fifth-tier English football is priced
+  about as sharply as the Premier League.
+
+**Conclusion: PitchIQ carries no information the closing line lacks.**
+
+Read the other way: knowing nothing scores 0.2281, the market 0.2036,
+and we reach 0.2086. **We cover about 80% of that distance** using only
+past results and dates — no injury news, no lineups.
+
+The remaining 20% is team news. That is a data problem, not a modelling
+problem, and no amount of further modelling closed it.
+
+**Scope limit:** football-data.co.uk prices domestic leagues only. There
+are **no odds for Champions League matches** in this archive, so nothing
+here says how the model compares to the market on the competition it
+was built for.
+
+---
+
+## 5D. Calibration
+
+A different property from accuracy. The plan states the test (§23): *if
+PitchIQ predicts 70% for a class repeatedly, that class should happen
+about 70% of the time.*
+
+A model can rank matches perfectly and still overstate every number it
+prints — fine for anything about ordering, useless for a simulator that
+multiplies probabilities across a season.
+
+| model | RPS | Brier | ECE | over-confidence |
+|---|---|---|---|---|
+| elo | 0.2099 | 0.3059 | 0.0063 | +0.0104 |
+| dixon-coles | 0.2141 | 0.3101 | **0.0033** | +0.0060 |
+| boosting | 0.2085 | 0.3045 | 0.0058 | +0.0096 |
+| market | 0.2036 | 0.2995 | 0.0068 | −0.0079 |
+
+**Dixon-Coles is better calibrated than the bookmakers.** When it says
+70%, it means 70%.
+
+Everything tracks the truth closely up to about 70% stated probability.
+Above that all three models fall below the line — they claim more than
+happens:
+
+```
+dixon-coles       n     claimed   happened
+  70%-80%      1,332      0.742      0.724
+  80%-90%        386      0.832      0.806
+  90%-100%        28      0.921      0.714
+```
+
+Reliability diagram: `data/figures/reliability.png`.
 
 ---
 
@@ -406,6 +612,101 @@ European rate is 20.4%.
 
 ---
 
+### 6.1 Parameter uncertainty
+
+The simulator above has a flaw: **it treats the ratings as facts.**
+Arsenal's attack is 1.04 in all 10,000 seasons, and so is the rating of
+a club seen 22 times. The possibility that we have simply misjudged a
+team never enters.
+
+Two penalty takers make the point:
+
+| | taken | scored | rating |
+|---|---|---|---|
+| Player A | 100 | 80 | 80% |
+| Player B | 5 | 4 | 80% |
+
+Same number, completely different confidence. The old simulator treats
+both as exactly 80%, every time.
+
+**How much this costs, measured.** Every complete domestic league season
+since 2015 — **4,225 club-seasons** — was simulated from a model that
+knew nothing past its first fixture, and where clubs actually finished
+was regressed on where they were predicted to finish:
+
+```
+actual = 0.828 x predicted        95% CI [0.799, 0.858]
+```
+
+A calibrated forecast gives 1.000. **Predictions are about 21% more
+spread out than reality supports** — good clubs pushed too far up, weak
+ones too far down. The errors cancel to zero overall, but only because
+the extremes are wrong in opposite directions.
+
+Domestic leagues rather than European ones because of sample size: UEFA
+replaced the group stage in 2024/25, so only two seasons have used the
+current format — 72 club-seasons, far too few to tell a calibrated
+forecast from an over-confident one.
+
+**The fix.** Refit Dixon-Coles 200 times on reweighted copies of the
+record and let each simulated season draw a different set of ratings.
+The reweighting is a Bayesian bootstrap — Dirichlet weights rather than
+draw-with-replacement, so a club with 22 matches cannot be left with
+none at all and collapse to the ridge prior, which would read as huge
+uncertainty when it is an artefact of the resampling.
+
+The spread it finds is exactly where it should be:
+
+```
+Manchester City   attack 1.149  +/- 0.038
+Bayern Munich     attack 1.244  +/- 0.040
+Shakhtar Donetsk  attack 0.382  +/- 0.139
+Sabah             attack 0.271  +/- 0.243     <- 6x wider
+```
+
+**What it achieved.** Same 1,448 club-seasons, same fixtures, same seed;
+the only difference is fixed versus drawn ratings:
+
+| | fixed | sampled |
+|---|---|---|
+| slope | 0.856 | **0.884** |
+| 90% interval coverage | 89.6% | **90.7%** |
+| coverage, clubs predicted top 3 | 85.9% | **92.2%** |
+| mean interval width | 13.7 | 14.1 places |
+
+```
+paired change in slope +0.0274   95% CI [+0.0225, +0.0327]   significant
+```
+
+Real, significant, and aimed correctly — the favourites band improved
+6.3 points, and the 90% interval is now honest. **But it closes 19% of
+the gap, not all of it.** The bootstrap captures *"we may have measured
+this club wrong"*; it cannot capture *"this club changed over the
+summer"*, and that is most of what remains.
+
+**What it did not achieve.** It was predicted here that Arsenal's title
+chance would fall from 20.4% to around 17%. It did not:
+
+| | fixed | sampled |
+|---|---|---|
+| Arsenal wins it | 20.4% | 20.5% |
+| top six clubs combined | 78.9% | 77.8% |
+| Barcelona top 8 | 55.1% | **52.3%** |
+| Manchester City top 8 | 63.6% | **61.8%** |
+| Sabah top 8 | 0.0% | 0.15% |
+
+The reason is visible in the spreads above: **the contenders have the
+tightest error bars of anyone.** Manchester City's rating is not in
+doubt. The uncertainty sits with clubs that have no title chance either
+way. And winning the competition means surviving four knockout ties,
+which is already close to four coin flips, so rating uncertainty adds
+little on top of randomness that large.
+
+The effect shows up on **qualification**, where one season's spread of
+results decides things, and washes out by the trophy.
+
+---
+
 ## 7. Validation against a known season
 
 The strongest test available: retrain on data ending **July 2025**, then
@@ -431,31 +732,44 @@ City at 22%, finished 8th.
 
 ## 8. Results — UCL 2026/27
 
-| Club | Avg pts | Top 8 | R16 | QF | SF | Final | Wins it |
-|---|---|---|---|---|---|---|---|
-| Arsenal | 16.8 | 74% | 95% | 74% | 52% | 35% | **20.4%** |
-| Manchester City | 16.0 | 64% | 93% | 71% | 48% | 31% | **18.4%** |
-| Bayern Munich | 16.7 | 72% | 94% | 69% | 45% | 28% | **14.8%** |
-| Liverpool | 16.3 | 67% | 91% | 62% | 38% | 21% | **10.7%** |
-| Paris Saint-Germain | 15.2 | 55% | 86% | 56% | 32% | 16% | 7.9% |
-| Barcelona | 15.2 | 55% | 86% | 54% | 29% | 15% | 6.7% |
-| Real Madrid | 15.1 | 53% | 85% | 54% | 30% | 14% | 6.6% |
-| Inter Milan | 14.6 | 47% | 81% | 47% | 23% | 11% | 4.5% |
-| … | | | | | | | |
-| Sabah | 3.3 | 0.0% | 0.1% | — | — | — | 0.0% |
+Ten thousand seasons, with ratings drawn from the 200-sample bootstrap
+so the forecast carries our uncertainty about the clubs as well as the
+luck inside the matches.
+
+| Club | Top 8 | Wins it |
+|---|---|---|
+| Arsenal | 73.9% | **20.5%** |
+| Manchester City | 61.8% | **18.1%** |
+| Bayern Munich | 71.6% | **14.5%** |
+| Liverpool | 67.4% | **10.7%** |
+| Paris Saint-Germain | 54.8% | 8.0% |
+| Real Madrid | 53.4% | 6.3% |
+| Barcelona | 52.3% | 6.0% |
+| Inter Milan | 46.6% | 4.4% |
+| … | | |
+| Sabah | 0.15% | 0.0% |
 
 Full table: `data/predictions/ucl_2026_27_simulation.csv`.
+
+The sampled run takes 38 seconds rather than 0.6, because the scoreline
+grids are rebuilt once per parameter draw.
 
 ---
 
 ## 9. Known limitations
 
-**The favourites are probably too strong.** Arsenal at 20.4% is higher
-than a bookmaker would quote (typically 15–18%). The model treats its
-own ratings as certain: it knows Arsenal's attack is +0.94, but not that
-it is ±0.15. Propagating that uncertainty would flatten the top and push
-probability toward the field. This is the single most worthwhile
-improvement outstanding.
+**Predictions are still about 17% too spread out.** Measured on 4,225
+club-seasons, finishing positions regress on predicted positions with a
+slope of 0.884 after the uncertainty work, against 1.000 for a
+calibrated forecast. Sampling the ratings closed 19% of the original
+gap. What remains is squad change between seasons — transfers, managers,
+rebuilds — which resampling the past cannot capture.
+
+**Arsenal at 20.5% is still higher than a bookmaker would quote**
+(typically 15–18%), and it is now clear that parameter uncertainty is
+not the explanation: the contenders are the best-measured clubs in the
+field. The likeliest causes are the missing squad information and the
+absence of any European market to calibrate against.
 
 **Four clubs have no domestic data.** Shakhtar Donetsk, Slavia Prague,
 Slovan Bratislava and Sabah play in countries with no division in the
@@ -493,16 +807,23 @@ python scripts/download_domestic.py   # ~300k matches, a few minutes
 python scripts/download_uefa.py       # ~4k matches
 python scripts/check_coverage.py      # join-quality report
 
+python scripts/build_features.py       # 40s -> 55 features per match
 python scripts/train.py               # 7s  -> data/models/dixon_coles.json
+python scripts/bootstrap_uncertainty.py  # ~25 min, run once
 python scripts/predict.py             # 144 fixture forecasts
 python scripts/simulate.py            # 10,000 seasons
 
 python scripts/backtest_2025_26.py    # validate against a known season
-pytest                                # 109 tests
+python scripts/evaluate_boosted.py    # four models on one split
+python scripts/evaluate_market.py     # model against the closing line
+python scripts/evaluate_calibration.py   # are the probabilities honest?
+python scripts/evaluate_simulator.py     # are the season ranges honest?
+python scripts/evaluate_uncertainty.py   # did sampling the ratings help?
+pytest                                # 179 tests
 ```
 
-Training happens **once**. Prediction and simulation load the saved
-model rather than refitting.
+Training and bootstrapping happen **once**. Prediction and simulation
+load the saved model and samples rather than refitting.
 
 ---
 
@@ -516,24 +837,35 @@ pitchiq/
   ingest/
     football_data_uk.py     domestic results and odds
     openfootball.py         UEFA competitions and qualifiers
+  features/
+    rolling.py              the causal pass; leakage impossible by design
+    build.py                assembles rolling + Elo + fixture context
   models/
     elo.py                  sequential ratings
     league_strength.py      per-country offset and scale
     outcome.py              rating gap -> outcome probabilities
     dixon_coles.py          attack/defence -> scorelines
+    boosted.py              gradient boosting over the feature layer
     ensemble.py             blend, plus calibrated scoreline grid
+    uncertainty.py          bootstrap: error bars on every rating
     store.py                save and load trained models
   sim/
     tournament.py           Monte Carlo over the whole competition
+    league.py               a domestic season, for validation at scale
+    draws.py                spreads seasons across parameter draws
   eval/
-    metrics.py              RPS, log loss, odds de-vigging
-scripts/                    download, train, predict, simulate, backtest
+    metrics.py              RPS, log loss, Brier, odds de-vigging
+    calibration.py          reliability curves and over-confidence
+    market.py               bookmaker odds -- evaluation only, never a feature
+    backtest.py             the walk-forward pass, cached
+scripts/                    download, train, predict, simulate, evaluate
 data/
   external/                 the 2026/27 draw (committed)
-  models/                   trained models (generated)
+  figures/                  reliability diagram
+  models/                   trained models and bootstrap samples (generated)
   predictions/              forecasts and simulation output (committed)
   raw/  processed/          downloaded and derived data (generated)
-tests/                      109 tests
+tests/                      179 tests
 ```
 
 ---
@@ -542,6 +874,23 @@ tests/                      109 tests
 
 **Learn strength from domestic leagues, not the Champions League.** 300k
 matches against 4k. The tournament is too small to learn from.
+
+**Bookmaker odds live in `eval/`, never in `features/`.** If a price
+became a model input the trees would learn to copy it; the backtest
+would look superb and the model would be worthless on any unpriced
+fixture — which includes every Champions League match in the archive.
+A test asserts the odds columns appear in no feature list.
+
+**Every headline comparison ships with an interval.** Four claims made
+during this build were overturned by paired bootstraps, two of them the
+author's own from the same session. Without an interval, "0.2085 against
+0.2092" says nothing about whether the gap would survive a different set
+of matches.
+
+**Refit every model on the same schedule before comparing them.** Twice
+a comparison here measured which model had seen more recent football
+rather than which model was better, and both times it favoured the newer
+model by a wide margin.
 
 **Ingest the qualifying rounds.** They looked like a footnote and were
 the highest-value data decision made. Doubled the cross-league sample

@@ -3,6 +3,26 @@
 A match-prediction engine for the UEFA Champions League, built to forecast
 the 2026/27 season.
 
+It reads three decades of football results, learns how good every club
+is, and plays the tournament ten thousand times.
+
+```
+Arsenal vs Tottenham  ->  Arsenal 75.7%, draw 15.7%, Tottenham 8.5%
+Arsenal over a season ->  top 8 in 73.9%, wins it in 20.5%
+```
+
+| | RPS on 37,765 held-out matches |
+|---|---|
+| knowing nothing | 0.2282 |
+| **PitchIQ** | **0.2085** |
+| bookmaker closing line | 0.2036 |
+
+Lower is better. **We cover about 80% of the distance from ignorance to
+the professionals**, using only past results and dates — no injuries, no
+lineups, no xG.
+
+304,039 matches · 1,533 clubs · 83 countries · 179 tests
+
 ## Why it is built this way
 
 The Champions League is a small tournament. Fifteen seasons of it come to
@@ -48,17 +68,17 @@ the same association.
 ```
 pitchiq/
   clubs.py              club-name resolution across sources
+  matches.py            one date-ordered stream over every source
   config.py             credentials and paths
-  ingest/
-    football_data_uk.py domestic results and odds
-    openfootball.py     UEFA club competitions
-  features/  models/  sim/  eval/
-scripts/
-  download_domestic.py  fetch and normalise domestic data
-  download_uefa.py      fetch and normalise UEFA data
-  check_coverage.py     how much of the UEFA field joins to domestic data
+  ingest/               football-data.co.uk and openfootball
+  features/             the causal pre-match feature layer
+  models/               elo, league strength, dixon-coles, boosting,
+                        uncertainty
+  sim/                  tournament and league Monte Carlo
+  eval/                 metrics, calibration, market, backtest
+scripts/                download, train, predict, simulate, evaluate
 data/external/          the 2026/27 draw
-tests/
+tests/                  179 tests
 ```
 
 ## Club-name resolution
@@ -102,43 +122,100 @@ cp .env.example .env      # then fill in the values
 `.env` holds credentials and is gitignored. Nothing reads it except
 `pitchiq/config.py`, and no value is ever logged.
 
-## Building the datasets
+## Running it
 
 ```bash
-python scripts/download_domestic.py   # ~300k domestic matches, a few minutes
-python scripts/download_uefa.py       # ~4k UEFA matches
-python scripts/check_coverage.py      # join quality report
+python scripts/download_domestic.py       # ~300k domestic matches
+python scripts/download_uefa.py           # ~4k UEFA matches
+python scripts/check_coverage.py          # join quality report
+
+python scripts/build_features.py          # 40s -> 55 features per match
+python scripts/train.py                   # 7s  -> the fitted goals model
+python scripts/bootstrap_uncertainty.py   # ~25 min, run once
+
+python scripts/predict.py                 # all 144 fixture forecasts
+python scripts/simulate.py                # 10,000 seasons
 pytest
+```
+
+Training and bootstrapping happen once; prediction and simulation load
+what they saved.
+
+### The measurement suite
+
+```bash
+python scripts/evaluate_features.py       # do the features beat elo alone?
+python scripts/evaluate_boosted.py        # four models on one split
+python scripts/evaluate_market.py         # against the bookmaker line
+python scripts/evaluate_calibration.py    # are the probabilities honest?
+python scripts/evaluate_simulator.py      # are the season ranges honest?
+python scripts/evaluate_uncertainty.py    # did sampling the ratings help?
 ```
 
 ## Status
 
-Data layer is complete and tested. The rating and prediction layers are
-not built yet.
+End to end and measured.
 
-- [x] Domestic ingest — 299,803 matches, 27 countries, 1993 → 2026
-- [x] UEFA ingest — 4,240 matches across three competitions and qualifiers
+- [x] Domestic ingest — 299,803 matches, 1993 → 2026
+- [x] UEFA ingest — 4,240 matches, six competitions
 - [x] Club-name resolution, no unresolved splits
 - [x] 2026/27 draw, structurally validated
-- [ ] Elo ratings
-- [ ] Dixon-Coles goals model with time decay
-- [ ] League-strength calibration
-- [ ] Evaluation against bookmaker closing odds (RPS, log-loss)
-- [ ] Monte Carlo simulation of the 36-team league phase and knockout bracket
+- [x] Elo ratings, with goal-difference weighting
+- [x] League-strength calibration — per-country scale and offset
+- [x] Dixon-Coles goals model with time decay — 2,862 parameters, 7s
+- [x] Pre-match feature layer — 55 features, leakage-proof by design
+- [x] Gradient boosting over those features
+- [x] Monte Carlo simulation of the league phase and knockout bracket
+- [x] Evaluation against bookmaker closing odds, with intervals
+- [x] Probability calibration, on matches and on whole seasons
+- [x] Parameter uncertainty propagated into the simulator
+
+### What the measurement found
+
+**We know nothing the bookmakers do not.** Blending model and market
+put 0% weight on the model in all three folds, and log-odds stacking
+gained 0.00009 RPS — indistinguishable from zero. The remaining gap is
+team news, which is a data problem rather than a modelling one.
+
+**Dixon-Coles is better calibrated than the market** — expected
+calibration error 0.0033 against 0.0068. When it says 70%, it means 70%.
+
+**Season-long ranges were too narrow, and are now close to honest.**
+Across 4,225 real club-seasons, finishing positions regressed on
+predicted positions with a slope of 0.828 where 1.000 is calibrated.
+Sampling the ratings from a 200-refit bootstrap moved it to 0.884 and
+brought 90% interval coverage to 90.7%. That closes 19% of the gap; the
+rest is squad change between seasons, which resampling the past cannot
+capture.
+
+### Known limits
 
 Four of the 36 clubs in the 2026/27 field — Shakhtar Donetsk, Slavia
 Prague, Slovan Bratislava and Sabah — play in countries with no division
-in the domestic archive. Their ratings can only come from European
-matches plus a league prior. Sabah has ten such matches, so its
-predictions will carry wide uncertainty, and are reported as such rather
-than presented with false confidence.
+in the domestic archive. Their ratings come from European matches plus a
+league prior, and the bootstrap reports them as the least certain in the
+field: Sabah's attack rating carries six times Manchester City's spread.
+
+**No squad information.** Injuries, suspensions, lineups and transfers
+are absent. This is essentially the whole remaining gap to the market.
+FBref is Cloudflare-blocked and its terms forbid automated access; no
+free lineup source was found.
+
+**No European odds.** The archive prices domestic leagues only, so the
+market comparison is a domestic finding. How PitchIQ compares to the
+market on Champions League football is untested and untestable with this
+data.
 
 ## Documentation
 
-[`docs/how-it-works.md`](docs/how-it-works.md) — the full account: data
-sources, name resolution, each model and why it exists, the evaluation
-method and results, the simulator, validation against 2025/26, and the
-known limitations.
+[`docs/architecture.md`](docs/architecture.md) — start here. The whole
+system explained from scratch with diagrams: pipeline, name resolution,
+the feature layer's leakage guarantee, each model, the simulator, and
+how everything is validated.
+
+[`docs/how-it-works.md`](docs/how-it-works.md) — the detailed account
+with every result, every interval, and the reasoning behind each
+decision, including the claims that were overturned along the way.
 
 ## Licence
 

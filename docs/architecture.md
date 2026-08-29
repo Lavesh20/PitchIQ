@@ -400,6 +400,64 @@ Now the 10,000 seasons capture **both** sources of variation: luck
 inside the matches, *and* the chance we have the team wrong. A club
 seen 238 times barely wobbles. One seen 22 times wobbles a lot.
 
+The spread it finds lands exactly where it should:
+
+```
+Manchester City   attack 1.149  ± 0.038
+Bayern Munich     attack 1.244  ± 0.040
+Shakhtar Donetsk  attack 0.382  ± 0.139
+Sabah             attack 0.271  ± 0.243     ← 6× wider
+```
+
+### Did it work?
+
+Same 1,448 club-seasons, same fixtures, same seed. The only difference
+is fixed versus drawn ratings.
+
+| | fixed | sampled |
+|---|---|---|
+| slope (1.000 is calibrated) | 0.856 | **0.884** |
+| 90% interval coverage | 89.6% | **90.7%** |
+| coverage, clubs predicted top 3 | 85.9% | **92.2%** |
+
+```
+paired change in slope +0.0274   95% CI [+0.0225, +0.0327]   significant
+```
+
+**Yes, and it aimed correctly** — nearly all the improvement landed in
+the favourites band, which is where the problem was. The 90% interval is
+now honest.
+
+**But it closes 19% of the gap, not all of it.** The bootstrap captures
+*"we may have measured this club wrong."* It cannot capture *"this club
+changed over the summer"* — transfers, managers, rebuilds — and that is
+most of what remains.
+
+### The prediction that was wrong
+
+It was expected that Arsenal's title chance would fall from 20.4% to
+around 17%. It did not:
+
+| | fixed | sampled |
+|---|---|---|
+| Arsenal wins it | 20.4% | 20.5% |
+| top six combined | 78.9% | 77.8% |
+| Barcelona top 8 | 55.1% | **52.3%** |
+| Manchester City top 8 | 63.6% | **61.8%** |
+| Sabah top 8 | 0.0% | 0.15% |
+
+The reason is in the spreads above: **the contenders have the tightest
+error bars of anyone.** We have seen Manchester City hundreds of times;
+their rating is not in doubt. The uncertainty sits with clubs that have
+no title chance either way.
+
+And winning the competition means surviving four knockout ties — already
+close to four coin flips. Rating uncertainty adds little on top of
+randomness that large.
+
+So the effect appears on **qualification**, where a single season's
+spread of results decides things, and washes out by the trophy.
+
 ---
 
 ## 7. How the work is validated
@@ -545,9 +603,12 @@ predicted position    mean error
 ```
 
 The errors cancel to zero overall — but only because the two extremes
-are wrong in *opposite* directions. That is the signature of
-predictions spread too wide, and it is what the parameter uncertainty
-work exists to fix.
+are wrong in *opposite* directions. That is the signature of predictions
+spread too wide.
+
+Sampling the ratings (§6) moves the slope to **0.884** and brings 90%
+interval coverage to **90.7%**. The remainder is squad change between
+seasons, which no amount of resampling the past can capture.
 
 ---
 
