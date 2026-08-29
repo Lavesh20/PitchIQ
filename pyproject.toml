@@ -16,6 +16,7 @@ dependencies = [
     "scikit-learn>=1.5",
     "pyarrow>=16.0",
     "matplotlib>=3.9",
+    "xgboost>=2.1",
 ]
 
 [tool.setuptools.packages.find]
